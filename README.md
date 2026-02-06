@@ -78,4 +78,4 @@ Then run:
 ## Data layout
 
 - ST checkpoints: `data/checkpoints.sqlite`
-- LT memory: `data/memory/{user_id}.jsonl`
+- LT memory: `data/memory/{sha256(user_id)}.jsonl` (record payload still stores raw `user_id`)

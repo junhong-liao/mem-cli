@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import uuid
 from datetime import datetime, timezone
@@ -25,8 +26,14 @@ class JsonlLongTermMemoryStore:
         self.memory_dir = memory_dir
         self.memory_dir.mkdir(parents=True, exist_ok=True)
 
+    def _user_key(self, user_id: str) -> str:
+        raw = str(user_id)
+        if not raw.strip():
+            raise LongTermMemoryStoreError("invalid user_id for long-term memory path")
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
     def _user_path(self, user_id: str) -> Path:
-        return self.memory_dir / f"{user_id}.jsonl"
+        return self.memory_dir / f"{self._user_key(user_id)}.jsonl"
 
     def load_recent(self, user_id: str, k: int = 3) -> List[Dict[str, Any]]:
         if k <= 0:
@@ -48,6 +55,12 @@ class JsonlLongTermMemoryStore:
                         print(
                             "Long-term memory warning: skipping malformed JSONL "
                             f"line {line_no} in {path}: {exc}"
+                        )
+                        continue
+                    if not isinstance(parsed, dict):
+                        print(
+                            "Long-term memory warning: skipping invalid record "
+                            f"line {line_no} in {path} (JSON value is not an object)."
                         )
                         continue
                     if not self.REQUIRED_FIELDS.issubset(parsed.keys()):

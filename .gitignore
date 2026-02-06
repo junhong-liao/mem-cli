@@ -7,3 +7,4 @@ data/checkpoints.sqlite
 data/memory/
 stage2-review-report.md
 stage4-harness-output.txt
+artifacts/demo_transcript.txt

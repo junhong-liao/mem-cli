@@ -3,7 +3,7 @@
 Objective: Implement user-scoped long-term memory persistence and retrieval using JSONL files so durable facts survive process restarts and are available to the agent across sessions.
 
 In scope:
-- Add LT memory storage at `data/memory/{user_id}.jsonl`.
+- Add LT memory storage at `data/memory/{sha256(user_id)}.jsonl` (while retaining raw `user_id` in record payload).
 - Implement a `memory_upsert` tool for model-mediated LT writes/updates.
 - Load LT records for active `user_id` on each turn and inject a bounded LT context into prompt construction.
 - Use v1 retrieval policy: recency-first top `k=3` LT records.
@@ -43,7 +43,7 @@ Invariants:
 Acceptance checks:
 - `python3 -m py_compile $(rg --files -g '*.py')`
 - `python3 main.py` starts and still shows `/session-clear`, `/memory-clear`, `/reset`.
-- First LT write creates `data/memory/{user_id}.jsonl` with valid JSONL records.
+- First LT write creates `data/memory/{sha256(user_id)}.jsonl` with valid JSONL records.
 - Same `MEMCLI_USER_ID` across fresh process restart restores LT influence (assistant can use previously stored durable fact).
 - Different `MEMCLI_USER_ID` does not load another user’s LT records.
 - LT retrieval is bounded to top `k=3` records (recency-first) for prompt context.

@@ -21,7 +21,7 @@ This plan is derived from `docs/decisions.md` and is execution-only.
 
 ## Stage 3: Long-Term Memory (LT)
 
-- Implement file-backed LT store at `data/memory/{user_id}.jsonl`.
+- Implement file-backed LT store at `data/memory/{sha256(user_id)}.jsonl` while retaining raw `user_id` in each record.
 - Enforce v1 required fields: `id`, `user_id`, `content`, `kind`, `created_at`, `updated_at`.
 - Allow optional fields: `confidence`, `source_turn_id`.
 - Add model-mediated `memory_upsert` tool with locked write guardrails.

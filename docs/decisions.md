@@ -53,12 +53,12 @@ Update this file before implementation when scope or contracts change.
 - Date: 02-05
 - Decision: Long-term memory file contract
 - Status: Locked
-- Details: Store LT records in `data/memory/{user_id}.jsonl` with one JSON object per line. Required fields in v1: `id`, `user_id`, `content`, `kind`, `created_at`, and `updated_at`. Optional fields in v1: `confidence` and `source_turn_id`.
+- Details: Store LT records in `data/memory/{sha256(user_id)}.jsonl` with one JSON object per line (raw `user_id` is kept in record payload). Required fields in v1: `id`, `user_id`, `content`, `kind`, `created_at`, and `updated_at`. Optional fields in v1: `confidence` and `source_turn_id`.
 
 - Date: 02-05
 - Decision: LT missing file behavior
 - Status: Locked
-- Details: If `data/memory/{user_id}.jsonl` does not exist, reads treat it as empty memory; create the file on first successful LT write.
+- Details: If `data/memory/{sha256(user_id)}.jsonl` does not exist, reads treat it as empty memory; create the file on first successful LT write.
 
 - Date: 02-05
 - Decision: LT corrupt file handling
@@ -154,7 +154,7 @@ None.
 - Revisit trigger: need for distributed concurrency or remote/shared checkpointing.
 
 - Decision: LT memory stored as JSONL files.
-- Chosen option: file-based store in `data/memory/{user_id}.jsonl`.
+- Chosen option: file-based store in `data/memory/{sha256(user_id)}.jsonl` with raw `user_id` retained in each record.
 - Alternatives considered: SQLite-backed LT store, hosted/vector DB backends.
 - Why now: simple local inspection, fast implementation, no extra service dependencies.
 - Revisit trigger: memory volume/performance limits or multi-process consistency needs.

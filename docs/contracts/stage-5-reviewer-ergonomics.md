@@ -8,9 +8,9 @@ In scope:
 - Ensure introspection output is bounded and deterministic.
 - Tighten README reviewer flow (quickstart, command semantics, verification path).
 - Keep script naming/references reviewer-friendly (`scripts/demo.sh`, `scripts/harness_checks.py`).
+- Include seeded scripted conversation demo checks in `scripts/demo.sh` as final reviewer verification.
 
 Out of scope:
-- Seeded scripted conversation demo scenarios (explicitly deferred to final pre-submit verification pass).
 - New memory retrieval/ranking features or LT schema changes.
 - Provider/env contract changes.
 - Runtime architecture refactors unrelated to reviewer ergonomics.
