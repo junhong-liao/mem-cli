@@ -34,6 +34,8 @@ class RuntimeContext:
     history: List[BaseMessage] = field(default_factory=list)
     state: Any = None
     trace_requests: bool = False
+    session_model: Any = None
+    session_bound_model: Any = None
 
 
 CommandHandler = Callable[[RuntimeContext, str], bool]
@@ -63,20 +65,20 @@ def stream_model_turn(
     stop_event = __import__("threading").Event()
     indicator_thread = start_thinking_indicator(stop_event)
     chunk_accumulator: Optional[AIMessageChunk] = None
-
-    if run_config:
-        stream_iter = bound_model.stream(messages, config=run_config)
-    else:
-        stream_iter = bound_model.stream(messages)
-    for chunk in stream_iter:
-        if chunk_accumulator is None:
-            chunk_accumulator = chunk
+    try:
+        if run_config:
+            stream_iter = bound_model.stream(messages, config=run_config)
         else:
-            chunk_accumulator += chunk
-
-    stop_event.set()
-    indicator_thread.join(timeout=1)
-    clear_line()
+            stream_iter = bound_model.stream(messages)
+        for chunk in stream_iter:
+            if chunk_accumulator is None:
+                chunk_accumulator = chunk
+            else:
+                chunk_accumulator += chunk
+    finally:
+        stop_event.set()
+        indicator_thread.join(timeout=1)
+        clear_line()
     if chunk_accumulator is None:
         return AIMessage(content="")
     return message_chunk_to_message(chunk_accumulator)  # type: ignore[return-value]
@@ -89,9 +91,15 @@ def run_agent_turn(
     tool_postprocessor: Optional[ToolPostprocessor] = None,
 ) -> List[BaseMessage]:
     tools_by_name = tool_registry.by_name()
-    model = context.adapter.build_model()
-    maybe_trace_request_payload(model, context.trace_requests)
-    bound_model = context.adapter.bind_tools(model, tool_registry.all())
+    if context.session_bound_model is None:
+        model = context.adapter.build_model()
+        maybe_trace_request_payload(model, context.trace_requests)
+        context.session_model = model
+        context.session_bound_model = context.adapter.bind_tools(
+            model,
+            tool_registry.all(),
+        )
+    bound_model = context.session_bound_model
     messages: List[BaseMessage] = list(context.history)
     system_message = SystemMessage(content=system_prompt)
     run_config = build_langsmith_run_config(context.adapter)
@@ -220,6 +228,7 @@ def run_cli(
 
         print_user_block(user_text, options.renderer)
         print()
+        history_before_turn = list(context.history)
         context.history.append(HumanMessage(content=user_text))
         prior_count = len(context.history)
         start_ms = time.perf_counter_ns()
@@ -228,12 +237,20 @@ def run_cli(
             options.on_before_turn(context, user_text)
 
         system_prompt = options.prompt_builder(context)
-        updated_history = run_agent_turn(
-            context=context,
-            system_prompt=system_prompt,
-            tool_registry=options.tool_registry,
-            tool_postprocessor=options.tool_postprocessor,
-        )
+        try:
+            updated_history = run_agent_turn(
+                context=context,
+                system_prompt=system_prompt,
+                tool_registry=options.tool_registry,
+                tool_postprocessor=options.tool_postprocessor,
+            )
+        except Exception as exc:  # noqa: BLE001
+            context.history = history_before_turn
+            print(
+                "Turn error: model invocation failed. "
+                f"Please retry or adjust input. Detail: {exc}"
+            )
+            continue
         new_messages = updated_history[prior_count:]
         context.history = updated_history
         pretty_print_assistant(new_messages, options.renderer)
