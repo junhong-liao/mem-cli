@@ -155,10 +155,15 @@ def _read_paste_input() -> Optional[str]:
     return content
 
 
-def run_cli(adapter: ProviderAdapter, options: RuntimeOptions, state: Any = None) -> None:
+def run_cli(
+    adapter: ProviderAdapter,
+    options: RuntimeOptions,
+    state: Any = None,
+    initial_history: Optional[List[BaseMessage]] = None,
+) -> None:
     context = RuntimeContext(
         adapter=adapter,
-        history=[],
+        history=list(initial_history or []),
         state=state,
         trace_requests=options.trace_requests,
     )

@@ -3,3 +3,5 @@
 __pycache__/
 *.pyc
 review-data.json
+data/checkpoints.sqlite
+stage2-review-report.md
