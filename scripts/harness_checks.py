@@ -10,15 +10,16 @@ from pathlib import Path
 from typing import Any, Iterable, List
 from unittest.mock import patch
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
 
 from cli_core.checkpoints import SqliteCheckpointStore
 from cli_core.lt_memory import JsonlLongTermMemoryStore
 from cli_core.runtime import RuntimeOptions, run_cli, stream_model_turn
 from cli_core.tools import ToolRegistry
-
-
-ROOT = Path(__file__).resolve().parents[1]
 
 
 class CheckFailed(RuntimeError):

@@ -23,7 +23,16 @@ Minimal LangChain-based CLI conversational agent with:
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+cp .env.example .env  # then set MOONSHOT_API_KEY in .env
 python3 main.py
+```
+
+Make-based shortcut:
+
+```bash
+make setup
+# edit .env and set MOONSHOT_API_KEY
+make run
 ```
 
 Required env:
@@ -48,7 +57,7 @@ Run all acceptance checks (plus core regression checks):
 Direct harness invocation:
 
 ```bash
-python3 scripts/harness_checks.py
+make harness
 ```
 
 ## Reviewer flow
@@ -56,8 +65,8 @@ python3 scripts/harness_checks.py
 Use this sequence for a deterministic reviewer run:
 
 ```bash
-python3 -m py_compile $(rg --files -g '*.py')
-python3 main.py
+make check
+make run
 ```
 
 In CLI:
@@ -74,6 +83,12 @@ Then run:
 ```
 
 `scripts/demo.sh` is the single end-to-end reviewer entrypoint and calls `scripts/harness_checks.py`.
+
+Fast verification (after setting `MOONSHOT_API_KEY`):
+
+```bash
+make demo
+```
 
 ## Data layout
 
