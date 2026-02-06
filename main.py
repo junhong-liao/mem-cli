@@ -5,6 +5,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from langchain_core.tools import tool
+
 from cli_core import (
     RendererConfig,
     RuntimeContext,
@@ -16,18 +18,36 @@ from cli_core import (
     log_env_loaded,
     run_cli,
 )
+from cli_core.lt_memory import JsonlLongTermMemoryStore
 from cli_core.providers.base import MissingEnvError
 
 DEFAULT_USER_ID = "default-user"
 DEFAULT_THREAD_ID = "default-thread"
 ENV_OVERRIDE_VAR = "MEMCLI_ENV_PATH"
 CHECKPOINT_DB = Path("data/checkpoints.sqlite")
+LT_MEMORY_DIR = Path("data/memory")
+LT_RETRIEVAL_K = 3
 
 
-def build_prompt(_context) -> str:
+def build_prompt(context: RuntimeContext) -> str:
+    state = context.state if isinstance(context.state, dict) else {}
+    records = state.get("lt_recent_records", [])
+    memory_lines = []
+    for record in records:
+        content = str(record.get("content", "")).strip()
+        if not content:
+            continue
+        kind = str(record.get("kind", "semantic")).strip() or "semantic"
+        memory_lines.append(f"- [{kind}] {content}")
+    known_memory_block = "\n".join(memory_lines) if memory_lines else "(none)"
     return (
         "You are a helpful assistant. Keep answers concise unless asked to expand.\n"
-        "Use the conversation history to resolve follow-ups and pronouns."
+        "Use the conversation history to resolve follow-ups and pronouns.\n\n"
+        "You may call tool `memory_upsert` to store durable user facts/preferences/"
+        "constraints for future sessions. Only store stable information likely useful "
+        "later. Do not store one-off chatter, transient requests, or uncertain facts.\n\n"
+        "Known memory (optional context, may be stale):\n"
+        f"{known_memory_block}"
     )
 
 
@@ -56,12 +76,22 @@ def _clear_session_state(context: RuntimeContext) -> str:
 
 
 def _clear_memory_state(context: RuntimeContext) -> str:
-    # Stage 1 hook: LT storage internals are added in later stages.
     state = context.state if isinstance(context.state, dict) else {}
-    if state.get("memory_cleared", False):
+    identity = state.get("identity", {})
+    user_id = identity.get("user_id", DEFAULT_USER_ID)
+    store = state.get("lt_store")
+    if store is None or not hasattr(store, "clear"):
         return "Memory already clear for active user (no persisted memory to remove)."
-    state["memory_cleared"] = True
+
+    try:
+        cleared = bool(store.clear(user_id))
+    except Exception as exc:  # noqa: BLE001
+        return f"Memory clear warning for active user: {exc}"
+
+    state["lt_recent_records"] = []
     context.state = state
+    if not cleared:
+        return "Memory already clear for active user (no persisted memory to remove)."
     return "Memory cleared for active user."
 
 
@@ -108,6 +138,75 @@ def _on_after_turn(context: RuntimeContext, _new_messages) -> None:
         )
 
 
+def _on_before_turn(context: RuntimeContext, _user_text: str) -> None:
+    state = context.state if isinstance(context.state, dict) else {}
+    identity = state.get("identity", {})
+    user_id = identity.get("user_id", DEFAULT_USER_ID)
+    thread_id = identity.get("thread_id", DEFAULT_THREAD_ID)
+    state["turn_counter"] = int(state.get("turn_counter", 0)) + 1
+    state["active_turn_id"] = f"{thread_id}:{state['turn_counter']}"
+    state["turn_memory_write_count"] = 0
+
+    store = state.get("lt_store")
+    if store is None or not hasattr(store, "load_recent"):
+        state["lt_recent_records"] = []
+        context.state = state
+        return
+
+    try:
+        state["lt_recent_records"] = store.load_recent(user_id, k=LT_RETRIEVAL_K)
+    except Exception as exc:  # noqa: BLE001
+        print(f"Long-term memory retrieval warning for active user: {exc}")
+        state["lt_recent_records"] = []
+    context.state = state
+
+
+def _build_memory_upsert_tool(
+    state: dict[str, Any],
+    store: JsonlLongTermMemoryStore,
+):
+    @tool
+    def memory_upsert(
+        content: str,
+        kind: str = "semantic",
+        confidence: float | None = None,
+        source_turn_id: str | None = None,
+    ) -> str:
+        """Store durable user memory for use across sessions.
+
+        Save only stable user facts/preferences/constraints likely useful in future turns.
+        Skip one-off chatter, transient requests, and uncertain information.
+        """
+
+        cleaned = content.strip()
+        if not cleaned:
+            return "Memory write skipped: content is empty."
+
+        identity = state.get("identity", {})
+        user_id = identity.get("user_id", DEFAULT_USER_ID)
+        turn_id = source_turn_id or str(state.get("active_turn_id", "")).strip() or None
+        memory_kind = kind.strip() or "semantic"
+        try:
+            record = store.append(
+                user_id=user_id,
+                content=cleaned,
+                kind=memory_kind,
+                confidence=confidence,
+                source_turn_id=turn_id,
+            )
+        except Exception as exc:  # noqa: BLE001
+            return (
+                "Memory write failed for active user. "
+                f"The session will continue without durable memory for this turn: {exc}"
+            )
+        return (
+            f"Memory saved for active user. id={record['id']} "
+            f"kind={record['kind']}."
+        )
+
+    return memory_upsert
+
+
 def main() -> None:
     trace_enabled = is_env_enabled(["CLI_TRACE_REQUEST"])
     repo_root = Path(__file__).resolve().parent
@@ -141,11 +240,14 @@ def main() -> None:
         sys.exit(1)
 
     checkpoint_store = SqliteCheckpointStore(repo_root / CHECKPOINT_DB)
+    lt_store = JsonlLongTermMemoryStore(repo_root / LT_MEMORY_DIR)
     state: dict[str, Any] = {
         "identity": _load_identity(),
-        "memory_cleared": False,
         "checkpoint_store": checkpoint_store,
+        "lt_store": lt_store,
+        "lt_recent_records": [],
     }
+    tools.register(_build_memory_upsert_tool(state, lt_store))
     thread_id = state["identity"]["thread_id"]
     try:
         state["restored_from_checkpoint"] = checkpoint_store.load(thread_id)
@@ -162,6 +264,7 @@ def main() -> None:
         },
         on_start=_on_start,
         on_reset=_handle_reset,
+        on_before_turn=_on_before_turn,
         on_after_turn=_on_after_turn,
         renderer=RendererConfig(assistant_label="Agent", user_label="You"),
         trace_requests=trace_enabled,

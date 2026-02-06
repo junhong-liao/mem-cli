@@ -112,9 +112,24 @@ def run_agent_turn(
             for tool_call in tool_calls:
                 tool_name = tool_call.get("name")
                 tool = tools_by_name.get(tool_name)
-                if tool is None:
+                state = context.state if isinstance(context.state, dict) else {}
+                if (
+                    tool_name == "memory_upsert"
+                    and isinstance(state, dict)
+                    and int(state.get("turn_memory_write_count", 0)) >= 1
+                ):
+                    tool_output = (
+                        "Memory write skipped: only one memory_upsert call is "
+                        "allowed per turn."
+                    )
+                elif tool is None:
                     tool_output: Any = f"Unknown tool: {tool_name}"
                 else:
+                    if tool_name == "memory_upsert" and isinstance(state, dict):
+                        state["turn_memory_write_count"] = (
+                            int(state.get("turn_memory_write_count", 0)) + 1
+                        )
+                        context.state = state
                     try:
                         tool_output = tool.invoke(tool_call.get("args", {}))
                     except ValidationError as exc:
