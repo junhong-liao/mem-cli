@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import signal
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
@@ -190,73 +191,93 @@ def run_cli(
         state=state,
         trace_requests=options.trace_requests,
     )
+    signal_targets = [signal.SIGINT]
+    if hasattr(signal, "SIGQUIT"):
+        signal_targets.append(signal.SIGQUIT)
+    previous_handlers: Dict[signal.Signals, Any] = {}
+
+    def _graceful_signal_exit(_signum, _frame) -> None:
+        raise KeyboardInterrupt
+
+    for sig in signal_targets:
+        previous_handlers[sig] = signal.getsignal(sig)
+        signal.signal(sig, _graceful_signal_exit)
+
     if options.on_start:
         options.on_start(context)
 
-    while True:
-        user_text = input("\n> ").strip()
-        if not user_text:
-            continue
-        clear_previous_line()
-        normalized = user_text.strip().lower()
-        cmd = normalized.split()[0].rstrip("].,;:") if normalized.startswith("/") else ""
-
-        if cmd == "/paste":
-            pasted = _read_paste_input()
-            if pasted is None:
+    try:
+        while True:
+            try:
+                user_text = input("\n> ").strip()
+            except (EOFError, KeyboardInterrupt):
+                print("\nBye.")
+                break
+            if not user_text:
                 continue
-            user_text = pasted
+            clear_previous_line()
             normalized = user_text.strip().lower()
             cmd = normalized.split()[0].rstrip("].,;:") if normalized.startswith("/") else ""
 
-        if cmd in {"/exit", "/quit"}:
-            print("Bye.")
-            break
+            if cmd == "/paste":
+                pasted = _read_paste_input()
+                if pasted is None:
+                    continue
+                user_text = pasted
+                normalized = user_text.strip().lower()
+                cmd = normalized.split()[0].rstrip("].,;:") if normalized.startswith("/") else ""
 
-        if cmd == "/reset":
-            if options.on_reset:
-                message = options.on_reset(context)
-            else:
-                context.history = []
-                message = "History cleared."
-            print(message)
-            continue
+            if cmd in {"/exit", "/quit"}:
+                print("Bye.")
+                break
 
-        handler = options.command_handlers.get(cmd) if cmd else None
-        if handler and handler(context, user_text):
-            continue
+            if cmd == "/reset":
+                if options.on_reset:
+                    message = options.on_reset(context)
+                else:
+                    context.history = []
+                    message = "History cleared."
+                print(message)
+                continue
 
-        print_user_block(user_text, options.renderer)
-        print()
-        history_before_turn = list(context.history)
-        context.history.append(HumanMessage(content=user_text))
-        prior_count = len(context.history)
-        start_ms = time.perf_counter_ns()
+            handler = options.command_handlers.get(cmd) if cmd else None
+            if handler and handler(context, user_text):
+                continue
 
-        if options.on_before_turn:
-            options.on_before_turn(context, user_text)
+            print_user_block(user_text, options.renderer)
+            print()
+            history_before_turn = list(context.history)
+            context.history.append(HumanMessage(content=user_text))
+            prior_count = len(context.history)
+            start_ms = time.perf_counter_ns()
 
-        system_prompt = options.prompt_builder(context)
-        try:
-            updated_history = run_agent_turn(
-                context=context,
-                system_prompt=system_prompt,
-                tool_registry=options.tool_registry,
-                tool_postprocessor=options.tool_postprocessor,
-            )
-        except Exception as exc:  # noqa: BLE001
-            context.history = history_before_turn
-            print(
-                "Turn error: model invocation failed. "
-                f"Please retry or adjust input. Detail: {exc}"
-            )
-            continue
-        new_messages = updated_history[prior_count:]
-        context.history = updated_history
-        pretty_print_assistant(new_messages, options.renderer)
+            if options.on_before_turn:
+                options.on_before_turn(context, user_text)
 
-        if options.on_after_turn:
-            options.on_after_turn(context, new_messages)
+            system_prompt = options.prompt_builder(context)
+            try:
+                updated_history = run_agent_turn(
+                    context=context,
+                    system_prompt=system_prompt,
+                    tool_registry=options.tool_registry,
+                    tool_postprocessor=options.tool_postprocessor,
+                )
+            except Exception as exc:  # noqa: BLE001
+                context.history = history_before_turn
+                print(
+                    "Turn error: model invocation failed. "
+                    f"Please retry or adjust input. Detail: {exc}"
+                )
+                continue
+            new_messages = updated_history[prior_count:]
+            context.history = updated_history
+            pretty_print_assistant(new_messages, options.renderer)
 
-        elapsed_ms = (time.perf_counter_ns() - start_ms) / 1_000_000
-        print(f"\nTime: {elapsed_ms:.0f} ms")
+            if options.on_after_turn:
+                options.on_after_turn(context, new_messages)
+
+            elapsed_ms = (time.perf_counter_ns() - start_ms) / 1_000_000
+            print(f"\nTime: {elapsed_ms:.0f} ms")
+    finally:
+        for sig, handler in previous_handlers.items():
+            signal.signal(sig, handler)

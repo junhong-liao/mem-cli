@@ -21,6 +21,7 @@ from cli_core import (
 )
 from cli_core.lt_memory import JsonlLongTermMemoryStore
 from cli_core.providers.base import MissingEnvError
+from cli_core.render import print_bordered_block
 
 DEFAULT_USER_ID = "default-user"
 DEFAULT_THREAD_ID = "default-thread"
@@ -215,8 +216,10 @@ def _on_start(context: RuntimeContext) -> None:
     restored = len(context.history)
     print(f"identity user_id={user_id} thread_id={thread_id}")
     print(f"session restored_messages={restored}")
-    print("commands: /session-clear /memory-clear /reset /paste /exit")
-    print("inspect: /session-show /memory-show")
+    print_bordered_block(
+        "commands: /session-clear /memory-clear /reset /paste /exit\n"
+        "inspect: /session-show /memory-show"
+    )
 
 
 def _on_after_turn(context: RuntimeContext, _new_messages) -> None:
