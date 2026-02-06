@@ -21,7 +21,8 @@ class RendererConfig:
 
 
 def render_header(label: str) -> None:
-    line = f"---- {label} ----"
+    rule = chr(0x2500) * 4
+    line = f"{rule} {label} {rule}"
     print(f"\n{line}")
 
 
@@ -116,6 +117,8 @@ def print_user_block(text: str, config: RendererConfig) -> None:
 def start_thinking_indicator(stop_event: threading.Event) -> threading.Thread:
     def thinking_indicator() -> None:
         dots = 0
+        sys.stdout.write("\rThinking...")
+        sys.stdout.flush()
         while not stop_event.is_set():
             dots = (dots % 3) + 1
             sys.stdout.write("\rThinking" + "." * dots + "   ")
