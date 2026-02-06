@@ -1,4 +1,4 @@
-langchain
-langchain-openai
-python-dotenv
-pydantic
+langchain==1.2.8
+langchain-openai==1.1.7
+python-dotenv==1.2.1
+pydantic==2.12.5

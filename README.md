@@ -2,11 +2,11 @@
 
 Minimal LangChain-based CLI conversational agent with:
 
-- Stage 1 runtime contracts and reset commands
-- Stage 2 short-term memory (thread-scoped sqlite checkpoints)
-- Stage 3 long-term memory (user-scoped JSONL records)
-- Stage 4 runtime hardening + scripted acceptance harness
-- Stage 5 reviewer ergonomics (`/session-show`, `/memory-show`)
+- Runtime contracts and reset commands
+- Short-term memory (thread-scoped sqlite checkpoints)
+- Long-term memory (user-scoped JSONL records)
+- Runtime hardening + scripted acceptance harness
+- Reviewer ergonomics (`/session-show`, `/memory-show`)
 
 ## Runtime contracts
 
@@ -37,9 +37,9 @@ Optional env:
 - `MEMCLI_THREAD_ID`
 - `MEMCLI_ENV_PATH`
 
-## Stage 4 acceptance harness
+## Acceptance harness
 
-Run all Stage 4 acceptance checks (plus Stage 1-3 regression checks):
+Run all acceptance checks (plus core regression checks):
 
 ```bash
 ./scripts/demo.sh
@@ -51,7 +51,7 @@ Direct harness invocation:
 python3 scripts/harness_checks.py
 ```
 
-## Reviewer flow (Stage 5)
+## Reviewer flow
 
 Use this sequence for a deterministic reviewer run:
 
