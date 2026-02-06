@@ -114,6 +114,27 @@ Update this file before implementation when scope or contracts change.
 - Status: Locked
 - Details: Include a scripted harness with three demos and pass criteria: (1) ST continuity in same `thread_id` (pronoun/follow-up resolved), (2) LT recall across new `thread_id` for same `user_id`, (3) LT isolation for different `user_id` (no cross-user recall).
 
+### Reviewer Ergonomics (Stage 5)
+
+- Date: 02-05
+- Decision: Introspection command scope
+- Status: Locked
+- Details: Add read-only reviewer commands `/memory-show` and `/session-show` scoped only to the active `user_id`/`thread_id`. No global cross-user memory listing in v1.
+
+- Date: 02-05
+- Decision: Introspection output bounds
+- Status: Locked
+- Details: Introspection output must be bounded and deterministic (default capped rows/messages) to keep reviewer runs predictable and avoid noisy dumps.
+
+- Date: 02-05
+- Decision: Reviewer runbook quality bar
+- Status: Locked
+- Details: Provide a concise, no-fluff README section with exact setup and verification commands (quickstart + ST/LT/isolation/reset checks).
+
+- Date: 02-05
+- Decision: Reviewer demo script
+- Status: Locked
+- Details: Include one reproducible script entrypoint (`scripts/demo.sh`) that runs key checks end-to-end and prints pass markers.
 ## Open Decisions
 
 None.

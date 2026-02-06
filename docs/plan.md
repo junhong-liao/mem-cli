@@ -37,6 +37,14 @@ This plan is derived from `docs/decisions.md` and is execution-only.
 - Add concise tradeoff write-up aligned to `docs/decisions.md`.
 - Exit criteria: harness scenarios pass and docs explain behavior and scope boundaries.
 
+## Stage 5: Reviewer Ergonomics
+
+- Add read-only introspection commands scoped to active identity: `/memory-show` and `/session-show`.
+- Keep introspection bounded and deterministic (no global memory dump across users).
+- Add a no-fluff reviewer runbook with quickstart and exact verification steps.
+- Add a single scripted reviewer demo command for reproducible ST/LT behavior checks.
+- Exit criteria: reviewer can verify ST/LT behavior quickly without ad-hoc probing.
+
 ## Validation Gates (Each Stage)
 
 - `python3 -m py_compile $(rg --files -g '*.py')`

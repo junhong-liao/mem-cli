@@ -6,14 +6,16 @@ Minimal LangChain-based CLI conversational agent with:
 - Stage 2 short-term memory (thread-scoped sqlite checkpoints)
 - Stage 3 long-term memory (user-scoped JSONL records)
 - Stage 4 runtime hardening + scripted acceptance harness
+- Stage 5 reviewer ergonomics (`/session-show`, `/memory-show`)
 
 ## Runtime contracts
 
 - Provider policy: Kimi/Moonshot only.
 - Env loading: repo-local `.env` (or explicit `MEMCLI_ENV_PATH` override), no parent traversal.
 - Identity defaults: `MEMCLI_USER_ID=default-user`, `MEMCLI_THREAD_ID=default-thread`.
-- Commands: `/session-clear`, `/memory-clear`, `/reset`, `/paste`, `/exit`.
+- Commands: `/session-clear`, `/memory-clear`, `/session-show`, `/memory-show`, `/reset`, `/paste`, `/exit`.
 - Clear commands and `/reset` are non-interactive and idempotent.
+- Introspection commands are read-only, active-scope only, and bounded.
 
 ## Quick start
 
@@ -40,14 +42,38 @@ Optional env:
 Run all Stage 4 acceptance checks (plus Stage 1-3 regression checks):
 
 ```bash
-./scripts/run_stage4_acceptance.sh
+./scripts/demo.sh
 ```
 
 Direct harness invocation:
 
 ```bash
-python3 scripts/stage4_acceptance.py
+python3 scripts/harness_checks.py
 ```
+
+## Reviewer flow (Stage 5)
+
+Use this sequence for a deterministic reviewer run:
+
+```bash
+python3 -m py_compile $(rg --files -g '*.py')
+python3 main.py
+```
+
+In CLI:
+
+- Run `/session-show` to inspect active-thread short-term state only (bounded tail view).
+- Run `/memory-show` to inspect active-user long-term memory only (bounded newest-first view).
+- Run `/session-clear`, `/memory-clear`, or `/reset` as needed; all remain non-interactive/idempotent.
+- Run `/exit` to leave CLI.
+
+Then run:
+
+```bash
+./scripts/demo.sh
+```
+
+`scripts/demo.sh` is the single end-to-end reviewer entrypoint and calls `scripts/harness_checks.py`.
 
 ## Data layout
 

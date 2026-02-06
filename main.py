@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from langchain_core.messages import BaseMessage
 from langchain_core.tools import tool
 
 from cli_core import (
@@ -27,6 +28,9 @@ ENV_OVERRIDE_VAR = "MEMCLI_ENV_PATH"
 CHECKPOINT_DB = Path("data/checkpoints.sqlite")
 LT_MEMORY_DIR = Path("data/memory")
 LT_RETRIEVAL_K = 3
+SESSION_SHOW_LIMIT = 12
+MEMORY_SHOW_LIMIT = 12
+SHOW_CONTENT_PREVIEW_CHARS = 160
 
 
 def build_prompt(context: RuntimeContext) -> str:
@@ -105,6 +109,98 @@ def _handle_memory_clear(context: RuntimeContext, _raw: str) -> bool:
     return True
 
 
+def _clip_text(value: Any, limit: int = SHOW_CONTENT_PREVIEW_CHARS) -> str:
+    flattened = " ".join(str(value).split())
+    if len(flattened) <= limit:
+        return flattened
+    return f"{flattened[: limit - 3]}..."
+
+
+def _message_role(message: BaseMessage) -> str:
+    role = getattr(message, "type", "message")
+    if role == "human":
+        return "user"
+    if role == "ai":
+        return "assistant"
+    if role == "tool":
+        return "tool"
+    return str(role)
+
+
+def _session_show_text(context: RuntimeContext) -> str:
+    state = context.state if isinstance(context.state, dict) else {}
+    identity = state.get("identity", {})
+    thread_id = identity.get("thread_id", DEFAULT_THREAD_ID)
+    history = context.history if isinstance(context.history, list) else []
+    if not history:
+        return f"Session empty for active thread (thread_id={thread_id})."
+
+    tail = history[-SESSION_SHOW_LIMIT:]
+    start_index = len(history) - len(tail) + 1
+    lines = [
+        (
+            f"Session view for active thread (thread_id={thread_id}) "
+            f"showing_last={len(tail)} total_messages={len(history)} "
+            f"limit={SESSION_SHOW_LIMIT}:"
+        )
+    ]
+    for idx, message in enumerate(tail, start=start_index):
+        role = _message_role(message)
+        lines.append(
+            f"{idx:03d} [{role}] {_clip_text(getattr(message, 'content', ''))}"
+        )
+    return "\n".join(lines)
+
+
+def _memory_show_text(context: RuntimeContext) -> str:
+    state = context.state if isinstance(context.state, dict) else {}
+    identity = state.get("identity", {})
+    user_id = identity.get("user_id", DEFAULT_USER_ID)
+    store = state.get("lt_store")
+
+    if store is None or not hasattr(store, "load_recent"):
+        return f"Memory empty for active user (user_id={user_id})."
+
+    records = store.load_recent(user_id, k=MEMORY_SHOW_LIMIT)
+    if not records:
+        return f"Memory empty for active user (user_id={user_id})."
+
+    lines = [
+        (
+            f"Memory view for active user (user_id={user_id}) "
+            f"showing_latest={len(records)} limit={MEMORY_SHOW_LIMIT} "
+            "(order=newest-first):"
+        )
+    ]
+    for idx, record in enumerate(records, start=1):
+        lines.append(
+            (
+                f"{idx:02d} id={record.get('id', '-')}"
+                f" kind={record.get('kind', '-')}"
+                f" updated_at={record.get('updated_at', '-')}"
+                f" source_turn_id={record.get('source_turn_id', '-')}"
+                f" content={_clip_text(record.get('content', ''))}"
+            )
+        )
+    return "\n".join(lines)
+
+
+def _handle_session_show(context: RuntimeContext, _raw: str) -> bool:
+    try:
+        print(_session_show_text(context))
+    except Exception as exc:  # noqa: BLE001
+        print(f"Session show warning for active thread: {_clip_text(exc, limit=180)}")
+    return True
+
+
+def _handle_memory_show(context: RuntimeContext, _raw: str) -> bool:
+    try:
+        print(_memory_show_text(context))
+    except Exception as exc:  # noqa: BLE001
+        print(f"Memory show warning for active user: {_clip_text(exc, limit=180)}")
+    return True
+
+
 def _handle_reset(context: RuntimeContext) -> str:
     session_message = _clear_session_state(context)
     memory_message = _clear_memory_state(context)
@@ -120,6 +216,7 @@ def _on_start(context: RuntimeContext) -> None:
     print(f"identity user_id={user_id} thread_id={thread_id}")
     print(f"session restored_messages={restored}")
     print("commands: /session-clear /memory-clear /reset /paste /exit")
+    print("inspect: /session-show /memory-show")
 
 
 def _on_after_turn(context: RuntimeContext, _new_messages) -> None:
@@ -261,6 +358,8 @@ def main() -> None:
         command_handlers={
             "/session-clear": _handle_session_clear,
             "/memory-clear": _handle_memory_clear,
+            "/session-show": _handle_session_show,
+            "/memory-show": _handle_memory_show,
         },
         on_start=_on_start,
         on_reset=_handle_reset,
