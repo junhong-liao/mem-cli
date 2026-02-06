@@ -186,8 +186,11 @@ def run_cli(adapter: ProviderAdapter, options: RuntimeOptions, state: Any = None
             break
 
         if cmd == "/reset":
-            context.history = []
-            message = options.on_reset(context) if options.on_reset else "History cleared."
+            if options.on_reset:
+                message = options.on_reset(context)
+            else:
+                context.history = []
+                message = "History cleared."
             print(message)
             continue
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Protocol
+from typing import Any, Dict, List, Protocol
 
 from langchain_core.messages import BaseMessage
 
@@ -33,8 +33,10 @@ class ProviderAdapter(Protocol):
 def normalize_provider_name(value: str | None) -> str:
     if not value:
         return "moonshot"
-    return value.strip().lower()
-
+    normalized = value.strip().lower()
+    if normalized == "kimi":
+        return "moonshot"
+    return normalized
 
 
 class MissingDependencyError(RuntimeError):

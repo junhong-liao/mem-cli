@@ -6,15 +6,15 @@ from typing import Iterable, Optional
 
 from dotenv import load_dotenv
 
-_DEFAULT_ENV_FILES = (".env", ".env.local")
+_DEFAULT_ENV_FILES = (".env",)
 
 
 def find_env_file(start: Path, names: Iterable[str] = _DEFAULT_ENV_FILES) -> Optional[Path]:
-    for parent in [start, *start.parents]:
-        for name in names:
-            candidate = parent / name
-            if candidate.exists():
-                return candidate
+    root = start if start.is_dir() else start.parent
+    for name in names:
+        candidate = root / name
+        if candidate.exists():
+            return candidate
     return None
 
 
